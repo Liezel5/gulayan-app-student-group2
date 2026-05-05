@@ -66,7 +66,11 @@ function Records() {
   }
   const handleUpdateRecord = async (data) => {
     try {
-      //TODO make update record functional
+      const response = await api.put(`plants/${data.id}`, data);
+      // Update the record in the local state
+      setRecords(prev => prev.map(record => 
+        record.id === data.id ? response.data?.data || data : record
+      ));
       toast.success("Plant data updated.");
     } catch (error) {
       console.error(error);
