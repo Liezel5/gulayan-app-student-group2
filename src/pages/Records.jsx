@@ -18,11 +18,36 @@ function Records() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [backendSearchResults, setBackendSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const observerTarget = useRef(null);
   const isInInitialMount = useRef(true);
 
-  const handleSearchPlants = async () => {
-    // TODO search from the the backend; in case that all records is not yet loaded
+  const handleSearchPlants = async (query) => {
+    if (!query.trim()) {
+      setBackendSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    // If all records are loaded, don't need backend search
+    if (hasMore === false) {
+      setIsSearching(false);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      const response = await api.get('/plants/search', {
+        params: { query }
+      });
+      setBackendSearchResults(response.data?.data || []);
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error("Error searching records.");
+    } finally {
+      setIsSearching(false);
+    }
   }
   const handleLoadRecords = async (page = 1, append = false) => {
     //TODO: load the data from the database
@@ -41,7 +66,11 @@ function Records() {
   }
   const handleUpdateRecord = async (data) => {
     try {
-      //TODO make update record functional
+      const response = await api.put(`plants/${data.id}`, data);
+      // Update the record in the local state
+      setRecords(prev => prev.map(record => 
+        record.id === data.id ? response.data?.data || data : record
+      ));
       toast.success("Plant data updated.");
     } catch (error) {
       console.error(error);
@@ -63,11 +92,13 @@ function Records() {
       toast.error("Error encountered while deleting record.");
     }
   }
-  const filteredRecords = records.filter(record =>
-    record.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.variety?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.seedling_source?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRecords = isSearching || (searchTerm && hasMore)
+    ? backendSearchResults
+    : records.filter(record =>
+      record.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.variety?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.seedling_source?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   const loadMore = useCallback(() => {
     if (!isLoadingMore && hasMore && !searchTerm) {
       const nextPage = currentPage + 1;
@@ -116,6 +147,7 @@ function Records() {
     } else {
       setCurrentPage(1);
       setHasMore(true);
+      setBackendSearchResults([]);
       handleLoadRecords(1, false);
     }
   }, [searchTerm]);
@@ -142,7 +174,10 @@ function Records() {
             type="text"
             placeholder="Search records..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              handleSearchPlants(e.target.value);
+            }}
             className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 
               focus:ring-green-500 focus:border-transparent outline-none"
           />
